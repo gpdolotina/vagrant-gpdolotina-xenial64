@@ -1,0 +1,180 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+#Define Variables
+VM_BOX_NAME = "ubuntu/xenial64"
+MACHINE_NAME = "ubuntu1604"
+IP_ADDRESS = "88.88.88.88"
+
+# Vagrantfile API/syntax version. Don't touch unless you know what you're doing!
+VAGRANTFILE_API_VERSION = "2"
+
+# check for plugins and install if not.
+# %x(vagrant plugin install vagrant-bindfs) unless Vagrant.has_plugin?('vagrant-bindfs')
+# %x(vagrant plugin install vagrant-dns) unless Vagrant.has_plugin?('vagrant-dns')
+# %x(vagrant plugin install vagrant-cachier) unless Vagrant.has_plugin?('vagrant-cachier')
+
+Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
+  
+  # Every Vagrant virtual environment requires a box to build off of.
+  config.vm.box = VM_BOX_NAME
+
+  # Configure ssh username and password
+  #config.ssh.username = 'vagrant'
+  #config.ssh.password = '123123'
+  #config.ssh.insert_key = 'true'
+
+  # networking
+    config.vm.network :private_network, ip: IP_ADDRESS
+
+  # define the hostname
+  # config.vm.hostname = MACHINE_NAME
+ 
+  # configure the virtualbox environment
+    config.vm.provider :virtualbox do |vb|
+
+    # disable vb gui
+    vb.gui = false
+
+    host = RbConfig::CONFIG['host_os']
+
+    # Give VM 1/4 system memory & access to all cpu cores on the host
+      if host =~ /darwin/
+        cpus = `sysctl -n hw.ncpu`.to_i
+
+        # sysctl returns Bytes and we need to convert to MB
+        mem = `sysctl -n hw.memsize`.to_i / 1024 / 1024 / 3
+      elsif host =~ /linux/
+        cpus = `nproc`.to_i
+
+      # meminfo shows KB and we need to convert to MB
+        mem = `grep 'MemTotal' /proc/meminfo | sed -e 's/MemTotal://' -e 's/ kB//'`.to_i / 1024 / 3
+      else # sorry Windows folks, I can't help you
+        cpus = 2
+        mem = 1024
+      end
+
+    # define server resources
+      vb.customize ["modifyvm", :id, "--memory", mem]
+      vb.customize ["modifyvm", :id, "--cpus", cpus]
+
+    # define vm name
+      vb.customize ['modifyvm', :id, "--name", MACHINE_NAME ]
+
+    # enable support for symlinks in vms
+      vb.customize ["setextradata", :id, "VBoxInternal2/SharedFoldersEnableSymlinksCreate/v-root", "1"]
+
+    # always go through OS X resolver, allowing us to redirect local domains.
+      vb.customize ["modifyvm", :id, "--natdnsproxy1", "on"]
+      vb.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
+  end
+
+  # define some forwarded ports
+    forward_port = ->(guest, host = guest) do
+      config.vm.network :forwarded_port,
+        guest: guest,
+        host: host,
+        auto_correct: true
+    end
+    forward_port[3306]          # mysql
+    forward_port[80, 8081]      # nginx/apache
+
+  # define the synced (shared) folders
+    sync_folder = ->(host_folder, guest_folder,options = {nfs:true}) do
+      if File.directory?(File.expand_path(host_folder))
+        config.vm.synced_folder host_folder, guest_folder, options
+      end
+    end
+    sync_folder[".", "/vagrant"]
+    sync_folder["../../www", "/var/www"]
+    sync_folder["../../vhosts", "/var/vhosts"]
+    sync_folder["../../logs", "/var/logs"]
+    sync_folder["../../library", "/var/library"]
+
+  # sync mysql folder
+    sync_folder["../../mysql", "/var/mysql", {mount_options:["dmode=775,fmode=664"]}]
+    if Vagrant.has_plugin?("vagrant-bindfs")
+      config.bindfs.bind_folder "/var/mysql", "/var/mysql", :owner => "mysql", :group => "mysql"
+    end
+
+  # start the vagrant-dns configuration
+    if Vagrant.has_plugin?("vagrant-dns")
+      config.dns.tld = "raph"
+      config.dns.patterns = [
+          /^.*something.raph$/,
+          /^.*tests.raph$/,
+          /^.*raphael.raph$/,
+          /^.*pma.raph$/,
+          /^.*zf3-dev.raph$/,
+          /^.*zf3-expressive.raph$/,
+          /^.*expressive.raph$/,
+      ]
+      VagrantDNS::Config.auto_run = true
+      VagrantDNS::Config.logger = Logger.new("dns.log")
+    end
+
+  # define the name of the vagrant instance - no need to change this
+    config.vm.define MACHINE_NAME do |node|
+
+    # always provisioner
+    if File.exist?("provisioning/always.sh")
+        node.vm.provision :shell, path:"provisioning/always.sh"
+    end
+
+    # bootstrap provisioner
+      if File.exist?("provisioning/bootstrap.sh")
+        node.vm.provision :shell, path:"provisioning/bootstrap.sh"
+      end
+
+    # apache provisioner
+      if File.exist?("provisioning/apache.sh")
+        node.vm.provision :shell, path:"provisioning/apache.sh"
+      end
+
+    # mysql provisioner
+      if File.exist?("provisioning/mysql.sh")
+        node.vm.provision :shell, path:"provisioning/mysql.sh"
+      end
+
+    # php provisioner
+      if File.exist?("provisioning/php.sh")
+        node.vm.provision :shell, path:"provisioning/php.sh"
+      end
+
+    # composer provisioner
+      if File.exist?("provisioning/composer.sh")
+        node.vm.provision :shell, path:"provisioning/composer.sh"
+      end
+
+    # phpunit provisioner
+      if File.exist?("provisioning/phpunit.sh")
+        node.vm.provision :shell, path:"provisioning/phpunit.sh"
+      end
+
+    # nodejs provisioner
+      if File.exist?("provisioning/nodejs.sh")
+        node.vm.provision :shell, path:"provisioning/nodejs.sh"
+      end
+
+    # final provisioner
+      if File.exist?("provisioning/final.sh")
+        node.vm.provision :shell, path:"provisioning/final.sh"
+      end
+
+    # always run this provisioner
+      if File.exist?("provisioning/reload.sh")
+        node.vm.provision :shell, path:"provisioning/reload.sh"
+      end
+
+    # always run this provisioner
+      if File.exist?("provisioning/report.sh")
+        node.vm.provision :shell, path:"provisioning/report.sh"
+      end
+
+    # ssh key provisioner
+
+    # allow host ssh credentials to be used within the vm guest
+    node.ssh.forward_agent = true
+  end
+
+end
