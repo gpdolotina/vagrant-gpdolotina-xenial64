@@ -20,8 +20,8 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   config.vm.box = VM_BOX_NAME
 
   # Configure ssh username and password
-  #config.ssh.username = 'vagrant'
-  #config.ssh.password = '123123'
+  #config.ssh.username = 'ubuntu'
+  #config.ssh.password = 'ubuntu'
   #config.ssh.insert_key = 'true'
 
   # networking
