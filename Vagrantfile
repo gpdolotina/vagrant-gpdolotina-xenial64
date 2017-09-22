@@ -28,7 +28,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     config.vm.network :private_network, ip: IP_ADDRESS
 
   # define the hostname
-  #config.vm.hostname = MACHINE_NAME
+  config.vm.hostname = MACHINE_NAME
  
   # configure the virtualbox environment
     config.vm.provider :virtualbox do |vb|
@@ -86,10 +86,10 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
       end
     end
     sync_folder[".", "/vagrant"]
-    sync_folder["../../www", "/var/www"]
-    sync_folder["../../vhosts", "/var/vhosts"]
-    sync_folder["../../logs", "/var/logs"]
-    sync_folder["../../library", "/var/library"]
+    sync_folder["../resources/www", "/var/www", {mount_options:["dmode=775,fmode=775"],owner:"ubuntu",group:"www-data"}]
+    sync_folder["../resources/vhost", "/etc/apache2/sites-available", {mount_options:["dmode=775,fmode=775"],owner:"ubuntu",group:"www-data"}]
+    sync_folder["../resources/logs", "/var/log", {mount_options:["dmode=775,fmode=775"],owner:"ubuntu",group:"www-data"}]
+    #sync_folder["/var/library", "/var/lib"]
 
   # sync mysql folder
     sync_folder["../../mysql", "/var/mysql", {mount_options:["dmode=775,fmode=664"]}]
